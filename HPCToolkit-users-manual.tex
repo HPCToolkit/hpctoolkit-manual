@@ -302,7 +302,7 @@ Second, one launches an application with \HPCToolkit{}'s measurement tool, \hpcr
 Third, one invokes \hpcstruct{}, \HPCToolkit{}'s tool for analyzing an application binary and any shared objects and GPU binaries
 it used in the data collection run, as stored in the measurements directory.  It recovers
 information about source files, procedures, loops, and inlined code.
-Fourth, one uses \hpcprof{} of \hpcprof-mpi{} to combine information about an application's structure with dynamic performance measurements to produce a performance database.
+Fourth, one uses \hpcprof{} to combine information about an application's structure with dynamic performance measurements to produce a performance database.
 Finally, one explores a performance database with \HPCToolkit{}'s \hpcviewer{} and/or \hpctraceviewer{} graphical presentation tools.
 
 The rest of this chapter briefly discusses unique aspects of \HPCToolkit{}'s measurement, analysis and presentation capabilities.
@@ -385,16 +385,12 @@ Similarly, it exposes calls to compiler support routines and wait loops in commu
 \HPCToolkit{} combines (post-mortem) the recovered static program structure with dynamic call paths to expose inlined frames and loop nests.
 This enables us to attribute the performance of samples in their full static and dynamic context and correlate it with source code.
 
-The data reduction is done by either of two components of \HPCToolkit{}, \hpcprof{} or \hpcprof-mpi{}.
-Either is invoked on the  \emph{measurements directory} recorded by \hpcrun{}, and augmented with program
-structure information by \hpcstruct {}.
+The data reduction is done by \HPCToolkit's \hpcprof{} utility, invoked on the \emph{measurements directory} recorded by \hpcrun{} and augmented with program structure information by \hpcstruct{}.
+From the measurements and structure, \hpcprof{} generates a \emph{database directory} containing performance data presentable by \hpcviewer{}.
 
-The output of either of these
-components is a  \emph{database directory}, from which the data can be presented.
-
-\hpcprof{} is used when processing relatively small measurements directories, while \hpcprof-mpi{} is used to
-process larger applications and measurements directories in parallel.
-
+In most cases \hpcprof{} is able to complete the reduction in a matter of minutes, however for especially large experiments (more than about 100,000 threads or GPU streams~\cite{10.1145/3524059.3532397}) its multi-node sibling \hpcprofmpi{} may be substantially faster.
+\hpcprofmpi{} is an MPI application identical to \hpcprof{}, except that it additionally can exploit multiple compute nodes during the reduction.
+In our experience, exploiting 8-10 compute nodes via \hpcprofmpi{} can be as much as $5\times$ faster than \hpcprof{} for sufficiently large experiments.
 
 \section{Presenting Performance Measurements}
 
@@ -453,7 +449,6 @@ Second, one launches an application with \HPCToolkit{}'s measurement tool, \hpcr
 Third, one applies \hpcstruct{} to an application's measurement directory to recover program structure information from any CPU or GPU binary that was measured.
 Program structure, which includes information about files, procedures, inlined code, and loops, is used to relate performance measurements to source code.
 Fourth, one uses \hpcprof{} to combine information about an application's structure with dynamic performance measurements to produce a performance database.
-For large executions where analyzing performance measurements serially would be imprudent, \HPCToolkit{}  provides \hpcprof-mpi{} - an MPI program that can be launched to analyze  performance data from many MPI ranks and threads in parallel.
 Finally, one explores a performance database with \HPCToolkit{}'s graphical user interface: \hpcviewer{} which presents
 both a code-centric analysis of performance metrics and a time-centric (trace-based) analysis of an execution.
 
@@ -588,52 +583,43 @@ This command analyzes the binary and saves this information in a file named \tex
 
 \subsection{Analyzing Measurements \& Attributing Them to Source Code}
 
-To analyze \HPCToolkit{}'s measurements and attribute them to the application's source code, use either \hpcprof{} or \hpcprof-mpi{}.
-In most respects, \hpcprof{} and \hpcprof-mpi{} are semantically identical.
-Both generate the same set of summary metrics over all threads and processes in an execution.
-The difference between the two is that the latter is designed to process (in parallel) measurements from large-scale executions.
-Consequently, while the former can optionally generate separate metrics for each thread (see the \mytt{--metric/-M} option), the latter only generates summary metrics.
-However, the latter can also generate additional information for plotting thread-level metric values (see Section~\ref{sec:hpcviewer:plots}%
-%s~\ref{sec:effective-performance-analysis:load-imbalance} and
-).
-
-\hpcprof{} is typically used as follows:
+To analyze \HPCToolkit{}'s measurements and attribute them to the application's source code, use \hpcprof{}, typically invoked as follows:
 \begin{quote}
 \begin{verbatim}
-hpcprof -I <app-src>/+ \
-  hpctoolkit-app-measurements1 [hpctoolkit-app-measurements2 ...]
+hpcprof hpctoolkit-app-measurements
 \end{verbatim}
 \end{quote}
-and \hpcprof-mpi{} is analogous:
+
+This command will produce an \HPCToolkit{} performance database with the name \texttt{hpctoolkit-app-database}.
+If this database directory already exists, \hpcprof{} will form a unique name by appending a random hexadecimal qualifier.
+
+\hpcprof{} performs this analysis in parallel using multithreading.
+By default all available threads are used.
+If this is not wanted (e.g. using sharing a single machine), the thread count can be specified with \texttt{-j<threads>}.
+
+\hpcprof{} usually completes this analysis in a matter of minutes.
+For especially large experiments (applications using more than about 100,000 threads), the sibling \hpcprofmpi{} may produce results faster by exploiting additional compute nodes\footnote{
+We recommend running \hpcprofmpi{} across 8-10 compute nodes. More than this may not improve or may degrade the overall speed of the analysis.
+}.
+Typically \hpcprofmpi{} is invoked as follows, using 8 ranks and compute nodes:
 \begin{quote}
 \begin{verbatim}
-<mpi-launcher> hpcprof-mpi \
-  -I <app-src>/+ \
-  hpctoolkit-app-measurements1 [hpctoolkit-app-measurements2 ...]
+<mpi-launcher> -n 8 hpcprof-mpi hpctoolkit-app-measurements
 \end{verbatim}
 \end{quote}
-Either command will produce an \HPCToolkit{} performance database with the name \texttt{hpctoolkit-app-database}.
-If this database directory already exists, \hpcprof{} and \hpcprof-mpi{} will form a unique name using a numerical qualifier.
+Note that additional options may be needed to grant \hpcprofmpi{} access to all threads on each node, check the documentation for your scheduler and MPI implementation for details.
 
-Both \hpcprof{} and \hpcprof-mpi{} can collate multiple measurement databases, as long as they are gathered against the same binary.
-This capability is useful for (a) combining event sets gathered over multiple executions
-and (b) performing scalability studies (see Section~\ref{sec:effective-performance-analysis:scalability}).
-
-The above commands use an important option.
-The \texttt{-I/--include} option takes a directory \texttt{<app-src>} to application source code;
-the optional `\texttt{+}' suffix requests that the directory be searched recursively for source code.
-Either option can be passed multiple times to specify multiple structure files (e.g., for the application
-and each of the key libraries it uses) or multiple include paths that indicate
-roots of source trees for the application and/or of its libraries.
-
-Another potentially important option, especially for machines that require executing from special file systems, is the \texttt{-R/--replace-path} option for substituting instances of \emph{old-path} with \emph{new-path}: \texttt{-R 'old-path=new-path'}.
-
-A possibly important detail about the above command is that source code should be considered
-an input to  \hpcprof{} or \hpcprof-mpi{}.
-This is critical when using a machine that restricts executions to a scratch parallel file system.
-In such cases,
-not only must you copy \hpcprof-mpi{} into the scratch file system,
-but also all source code that you want \hpcprof-mpi{} to find and copy into the resulting database.
+If possible, \hpcprof{} will copy the sources for the application and any libraries into the resulting database.
+If the source code was moved since or was mounted at a different location than when the application was compiled, the resulting database may be missing some important source files.
+In these cases, the \texttt{-R/--replace-path} option may be specified to provide substitute paths based on prefixes.
+For example, if the application was compiled from source at \texttt{/home/joe/app/src/} but it is mounted at \texttt{/extern/homes/joe/app/src/} when running \hpcprof{}, the source files can be made available by invoking \hpcprof{} as follows:
+\begin{quote}
+\begin{verbatim}
+hpcprof -R `/home/joe/app/src/=/extern/homes/joe/app/src/' \
+  hpctoolkit-app-measurements
+\end{verbatim}
+\end{quote}
+Note that on systems where MPI applications are restricted to a scratch file system, it is the users responsibility to copy any wanted source files and make them available to \hpcprof{}.
 
 
 % ==========================================================
@@ -664,17 +650,6 @@ See the \hpcviewer{} help pane for details about how to specify derived metrics.
 
 \item
 Scalability bottlenecks in parallel codes can be pinpointed by differential analysis of two profiles with different degrees of parallelism (Section~\ref{sec:effective-performance-analysis:scalability}).
-
-The following sketches the mechanics of performing a simple scalability study between executions $x$ and $y$ of an application \texttt{app}:
-\begin{quote}
-  \verb|hpcrun [options-x] app [app-arguments-x]| \hfill (execution $x$) \\
-  \verb|hpcrun [options-y] app [app-arguments-y]| \hfill (execution $y$) \\
-  \verb|hpcstruct measurements-x measurements-y| \\
-  \verb|hpcprof ... -I ... measurements-x measurements-y| \\
-		or \\
-  \verb|hpcprof-mpi ... -I ... measurements-x measurements-y| \\
-  \verb|hpcviewer hpctoolkit-database| \hfill (compute a scaling-loss metric)
-\end{quote}
 
 \end{itemize}
 
@@ -1416,7 +1391,7 @@ conflicts with other process-level tools that use the Linux {\tt perf\_events} s
 
 \paragraph{Description:}  On Cray systems, we have observed that \hpcrun{} associates several profiles and traces with rank 0, thread 0. This results from the fact that the Cray PMI daemon gets forked from the application in a constructor and there is no exec. Initially, each process gets tagged with rank 0, thread 0 until the real rank and thread is determined later in the execution. That determination never happens for the PMI daemon.
 
-\paragraph{Workaround:} In our experience, the hpcrun files in the measurement for the daemon tagged with rank 0 thread 0 are very small. In experiments we ran, they were about 2K. You can remove these profiles and their matching trace files before processing a measurement database with hpcprof or hpcprof-mpi. The correspondence between a profile and trace can be determined because they only differ in their suffix (hpcrun or hpctrace).
+\paragraph{Workaround:} In our experience, the hpcrun files in the measurement for the daemon tagged with rank 0 thread 0 are very small. In experiments we ran, they were about 2K. You can remove these profiles and their matching trace files before processing a measurement database with \hpcprof{}. The correspondence between a profile and trace can be determined because they only differ in their suffix (hpcrun or hpctrace).
 
 \section{\hpcrun{} sometimes enables writing of read-only data}
 
@@ -2034,17 +2009,8 @@ If any of these conditions are true, \hpcviewer{}'s otherwise snappy GUI can bec
 The solution is to install \hpcviewer{} on your local system, copy the database onto your local system, and run \hpcviewer{} locally.
 We almost always run \hpcviewer{} on our local desktops or laptops for this reason.
 
-Second, \HPCToolkit{}'s database may contain too many metrics.
-A common reason why this can occur is if rather than analyzing an \HPCToolkit{}  measurements directory, you chose to directly specify a large collection of {\tt .hpcrun} files directly on the command line. When you do this, it treats each {\tt .hpcrun} file as a separate experiment and gives you separate metrics for each.
-
-You can check the number of columns in your database by running
-\begin{quote}
-  \verb,grep -e "<Metric" experiment.xml | wc -l,
-\end{quote}
-If that command yields a number greater than 50 or so, \hpcviewer{} is likely slow because you are working with so many columns of metrics. In this case, you might consider using  \hpcprof-mpi{} or run \hpcprof{} to analyze the measurements directory as a whole, so you get one set of metrics, or you can build a database based on fewer separate {\tt .hpcrun} files on the command line to reduce the number of metrics overall.
-
-Third, \HPCToolkit{}'s database may be very large, which can cause the Java virtual machine to run short on memory and thrash. The memory footprint that \hpcviewer{} needs to store and the metrics for your measured program execution is likely near the maximum size for the Java heap specified at program launch.
-
+Second, the \HPCToolkit{} database may be very large, which can cause the Java virtual machine to run short on memory and thrash.
+The memory footprint that \hpcviewer{} needs to store and the metrics for your measured program execution is likely near the maximum size for the Java heap specified at program launch.
 On Linux, \hpcviewer{} accepts a command-line option \verb|--java-heap| that enables you to specify a larger non-default value for the maximum size of the Java heap. Run \verb|hpcviewer --help| for the details of how to use this option.
 
 
