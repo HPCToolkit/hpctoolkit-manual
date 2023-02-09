@@ -739,7 +739,7 @@ Otherwise, the configuration will be applied only on the current view.
 \newcommand{\miniview}{Mini Map View}
 \newcommand{\callview}{Call Stack View}
 \newcommand{\statview}{Statistics View}
-
+\newcommand{\blameview}{GPU Idleness Blame View}
 
 % ===========================================================================
 % ===========================================================================
@@ -823,6 +823,9 @@ while Figure\ref{fig:hpctraceviewer-stat} shows additional two window panes: \su
 
 \item \textbf{\statview} (tab in top, right pane):
   This view shows the list of procedures active  in the  space-time region shown in the Trace View at the current Call Path Depth. Each procedure's percentage in the \statview{} indicates the percentage of pixels in the Trace View pane that are filled with this procedure's color at the current Call Path Depth. When the Trace View is navigated to show a new time-space interval  or the Call Path Depth is  changed, the statistics view will  update its list of procedures and the percentage of execution time to reflect the new space-time interval or depth selection.
+
+\item \textbf{\blameview} (tab in top, right pane):
+The view shows the list of procedures that cause idle GPU streams displayed in the trace view.
 
 
 \item \textbf{\miniview} (right, bottom):
