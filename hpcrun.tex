@@ -133,40 +133,46 @@ and \verb|exec| the binary.
 \subsubsection{\hpcrun{} causes failures related to loading or using shared libraries}
 \label{hpcrun-audit}
 
-Unfortunately, the {\tt libc} implementations used today on most platforms have known bugs monitoring loading and unloading of shared libraries and calls to a shared library's API.
-While the best approach for coping with these problems is to use a system running  {\tt libc}  2.32 or later, for most people, this is not an option:
-the system administrator picks the operating system version, which determines the {\tt libc} and loader ({\tt ld.so}) versions available to developers.
+Unfortunately, the Glibc implementations used today on most platforms have known bugs monitoring loading and unloading of shared libraries and calls to a shared library's API.
+While the best approach for coping with these problems is to use a system running  Glibc  2.35 or later, for most people, this is not an option:
+the system administrator picks the operating system version, which determines the Glibc version available to developers.
 
-To understand what kinds of problems that you may encounter with shared libraries and how you can work around them, it is helpful to understand how HPCToolkit monitors shared libraries.
-On Power and \verb|x86_64| architectures, by default \hpcrun{}  use \verb|LD_AUDIT| to monitor an application's use of dynamic libraries.
-Use of \verb|LD_AUDIT|  is the only  strategy for monitoring shared libraries that will cause the loader to properly interpret a load module's
- \verb|RUNPATH| attribute. However, use of \verb|LD_AUDIT|  will cause {\tt dlmopen} to fail  for {\tt libc} $< 2.32$.
-While use of {\tt dlmopen} is rather uncommon, Intel's GTPin library for instrumentation of Intel GPU binaries, which is used by HPCToolkit, uses {\tt dlmopen}.
+To understand what kinds of problems that you may encounter with shared libraries and how you can work around them, it is helpful to understand how \HPCToolkit{} monitors shared libraries.
+On Power and \verb|x86_64| architectures, by default \hpcrun{} uses \verb|LD_AUDIT| to monitor an application's use of dynamic libraries.
+Use of \verb|LD_AUDIT|  is the only  strategy for monitoring shared libraries that will not cause a change in application behavior when libraries contain a \verb|RUNPATH|. However, Glibc's implementation of \verb|LD_AUDIT| has a number of bugs that may crash the application:
+
+\begin{itemize}
+\item Until Glibc 2.35, most applications running on ARM will crash. This was caused by a fatal flaw in Glibc's PLT handler for ARM, where an argument register that should have been saved was instead replaced with a junk pointer value. This register is used to return C/C++ \verb|struct| values from functions and methods, including some C++ constructors.
+
+\item Until Glibc 2.35, applications and libraries using \texttt{dlmopen} will crash. While most applications do not use \texttt{dlmopen}, an example of a library that does is Intel's GTPin, which \hpcrun{} uses to instrument Intel GPU code.
+
+\item Applications and libraries using significant amounts of static TLS space may crash with the message ``\texttt{cannot allocate memory in static TLS block}.''
+This is caused by a flaw in Glibc causing it to allocate insufficient static TLS space when \verb|LD_AUDIT| is enabled.
+For Glibc 2.35 and newer, setting the environment variable
+\begin{verbatim}
+export GLIBC_TUNABLES=glibc.rtld.optional_static_tls=0x400000000
+\end{verbatim}
+will instruct Glibc to allocate $16$MB of static TLS memory per thread, in our experience this is far more than any application will use (however the value can be adjusted freely).
+For older Glibc, the only option is to disable \hpcrun{}'s use of \verb|LD_AUDIT|.
+\end{itemize}
+
 
 % If your program uses {\tt dlmopen}, you have two alternatives: ask \hpcrun{} to use an alternative strategy for monitoring shared libraries, namely by wrapping {\tt dlopen} and {\tt dlclose}.
-
-At the writing of this manual, all existing versions of {\tt libc} have a fatal flaw in their implementations of the \verb|LD_AUDIT| API for the ARM architecture.
-When \verb|LD_AUDIT|  is enabled on ARM, it fails to save a register that passes an address used to determine where a returned structure should be written.
-Any  program that returns a structure will almost certainly fail on an ARM platform if \hpcrun{} uses \verb|LD_AUDIT| to monitor dynamic library operations.
 
 The following options direct \hpcrun{} to adjust the strategy it uses for monitoring dynamic libraries. We suggest that you don't consider using any of these options unless your program fails using \hpcrun{}'s defaults.
 
 \begin{description}
-\item{{\tt --disable-auditor}}  By default, \hpcrun{} uses \verb|LD_AUDIT| to track dynamic library
-                       operations. This option instructs hpcrun
+\item{{\tt --disable-auditor}}  This option instructs hpcrun
                        to track dynamic library operations by intercepting
                        {\tt dlopen} and {\tt dlclose}  instead of using \verb|LD_AUDIT|. Note
                        that this alternate approach can cause problem with
-                       load modules that specify a RUNPATH. Due to a {\tt libc} bug,
-                       this option is disabled by default on ARM.
+                       libraries and applications that specify a \verb|RUNPATH|.
 
-\item{{\tt --enable-auditor}}    \verb|LD_AUDIT| is by default disabled on ARM due to a {\tt libc} bug.
-                       Use this option to enable \verb|LD_AUDIT| on ARM. This option may be useful if none of your shared library API operations return structures.
+\item{{\tt --enable-auditor}}  This option is default, except on ARM or when Intel GTPin instrumentation is enabled.
+                       Passing this option instructs \hpcrun{} to use \verb|LD_AUDIT| in all cases.
 
 \item{{\tt --disable-auditor-got-rewriting}}
-                       By default, \hpcrun{} uses \verb|LD_AUDIT| to help track dynamic
-                       library operations using an 'auditor' library. When using
-                       an auditor library, {\tt libc} unnecessarily intercepts
+                       When using an \texttt{LD\_AUDIT}, Glibc unnecessarily intercepts
                        every call to a function in a shared library. \hpcrun{}
                        avoids this overhead by rewriting each shared library's
                        global offset table (GOT). Such rewriting is tricky.
@@ -175,20 +181,17 @@ The following options direct \hpcrun{} to adjust the strategy it uses for monito
                        application to fail.
 
 \item{{\tt --namespace-single}}   {\tt dlmopen} may load a shared library into an alternate
-                       namespace.  Use of {\tt dlmopen} to create multiple namespaces
-                       can cause an application to crash when using {\tt libc} $< 2.32$. This option asks HPCToolkit to load all
-                       shared libraries within the application namespace, which
-                       might help avoid a crash.  (Default when performing
-                       instruction-level measurements of Intel GPU binaries.)
+                       namespace, which crashes on Glibc until 2.35. This option instructs
+                       \hpcrun{} to override \texttt{dlmopen} to instead load all
+                       shared libraries within the application namespace.
+                       This may significantly change application behavior, but may be helpful to avoid crashing.
+                       This option is default when Intel GTPin instrumentation is enabled.
 
-\item{{\tt --namespace-multiple}} {\tt dlmopen} may load a shared library into an alternate
-                       namespace. Force HPCToolkit to allow {\tt dlmopen} to create
-                       alternate namespaces.  (Default unless performing
-                       instruction-level measurements of Intel GPU binaries.)
+\item{{\tt --namespace-multiple}} This option is the opposite of \texttt{--namespace-single}, and will instruct \hpcrun{} to \textit{not} override \texttt{dlmopen} and thus retain its normal function.
+                       This option is default except when Intel GTPin instrumentation is enabled.
  \end{description}
 
- If your code fails to find libraries when it is monitoring your code by wrapping {\tt dlopen} and {\tt dlclose} rather than using \verb|LD_AUDIT|, you can sidestep this problem by adding any library paths encoded by a {\tt RUNPATH} attributie in your application or a shared library it uses to your \verb|LD_LIBRARY_PATH| variable before launching \hpcrun{}.
-
+ If your code fails to find libraries when it is monitoring your code by wrapping {\tt dlopen} and {\tt dlclose} rather than using \verb|LD_AUDIT|, you can sidestep this problem by adding any library paths listed in the {\tt RUNPATH} of your application or library to your \verb|LD_LIBRARY_PATH| environment variable before launching \hpcrun{}.
 
 \subsubsection{ \hpcrun{} causes your application to fail when {\tt gprof} instrumentation is present}
 
@@ -731,6 +734,68 @@ have higher overhead (require an external lookup) but have almost no
 chance of interfering with an application.  The
 \verb|MEMLEAK_NO_HEADER| variable disables headers and uses only
 footers.
+
+% ===========================================================================
+
+\section{Experimental Python Support}
+
+This section provides a brief overview of how to use \HPCToolkit{} to analyze the performance of Python-based applications.
+Normally, \hpcrun{} will attribute performance to the CPython implementation, not to the application Python code, as shown in Figure~\ref{fig:python-support}.
+This usually is of little interest to an application developer, so \HPCToolkit{} provides experimental support for attributing to Python callstacks.
+
+\textbf{NOTE: This feature is in an experimental state. Many cases may not work as expected, crashes and corrupted performance data are likely. Use at your own risk.}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=.95\textwidth]{fig/python-comparison.png}
+\caption{
+    Example of a simple Python application measured without (left) and with (right) Python support enabled via \hpcrun{} \texttt{-a python}.
+    The left database has no source code, since sources were not provided for the CPython implementation.
+}
+\label{fig:python-support}
+\end{figure}
+
+If \HPCToolkit{} has been compiled with Python support enabled, \hpcrun{} is able to replace segments of the C callstacks with the Python code running in those frames.
+To enable this transformation, profile your application the additional \texttt{-a python} flag:
+\begin{quote}
+\begin{tabular}{@{}cl}
+(dynamic) & \verb|hpcrun -a python -e event@howoften python3 app arg ...| \\
+\end{tabular}
+\end{quote}
+
+As shown in Figure~\ref{fig:python-support}, passing this flag removes the CPython implementation details, replacing it with the much smaller Python callstack.
+When Python calls an external C library, \HPCToolkit{} will report both the name of the Python function object and the C function being called, in this example \texttt{sleep} and Glibc's \texttt{clock\_nanosleep} respectively.
+
+\subsection{Known Limitations}
+
+This section lists a number of known limitations with the current implementation of the Python support.
+It is recommended that users are aware of these limitations before attempting to use the Python support in practice.
+
+\begin{enumerate}
+\item
+Pythons older than 3.10 are not supported by \HPCToolkit{}.
+Please upgrade any applications and Python extensions to use a recent version of Python before attempting to enable Python support.
+
+\item
+The application must be run with the same Python that was used to compile \HPCToolkit{}.
+The CPython ABI can change between patch versions and due to certain build configuration flags.
+To ensure \hpcrun{} will not unwittingly crash the application, it is best to use a single Python for both \HPCToolkit{} and the application.
+
+\item
+The bottom-up and flat views of \hpcviewer{} may not correctly present Python callstacks, particularly those that call C/C++ extensions.
+Some Python functions may be missing, and the metrics attributed to them may be suspect.
+In these cases, refer to the top-down view as the known-good source of truth.
+
+\item
+Threads spawned by Python's \texttt{threading} and \texttt{subprocess} modules are not fully supported.
+Only the main Python thread will attribute performance to Python callstacks, all others will attribute performance to the CPython implementation.
+If Python \texttt{threading} is a performance bottleneck, consider implementing the parallelism in a C/C++ extension instead of in Python to avoid \href{https://docs.python.org/3/glossary.html#term-global-interpreter-lock}{contention on the GIL}.
+
+\item
+Applications using signals and signal handlers, for example Python's \texttt{signal} module, will experience crashes when run under \hpcrun{}.
+The current implementation fails to process the non-sequential modifications to the Python stack that take place when Python handles signals.
+
+\end{enumerate}
 
 % ===========================================================================
 

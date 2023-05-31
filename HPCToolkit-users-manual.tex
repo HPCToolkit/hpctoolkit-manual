@@ -120,7 +120,7 @@
 % ***************************************************************************
 % ***************************************************************************
 
-\title{\HPCToolkit{} User's Manual\\[.5in]Version 2023.02.15}
+\title{\HPCToolkit{} User's Manual\\[.5in]Version 2023.02.20}
 %\subtitle{}
 
 \author{John Mellor-Crummey,\\
@@ -138,7 +138,7 @@ Keren Zhou\\
 Rice University\\
 }
 
-\date{February 15, 2023}
+\date{February 20, 2023}
 
 \maketitle
 
@@ -361,8 +361,7 @@ it is necessary to map measurements back to the program source.
 The mappings include those of the application and any shared libraries referenced during the
 run, as well as those for any GPU binaries executed on GPUs during the run.
 To associate measurement data with the static structure of fully-optimized executables,
-we need a mapping between object code and its associated source code structure.
-\footnote{This object to source code mapping should be contrasted with the binary's line map, which
+we need a mapping between object code and its associated source code structure.\footnote{This object to source code mapping should be contrasted with the binary's line map, which
 (if present) is typically fundamentally line based.}
 \HPCToolkit{} constructs this mapping using binary analysis; we call this process
 \emph{recovering program structure}~\cite{Tallent-MC-Fagan:2009:PLDI-hpctoolkit-binary-analysis}.
@@ -595,10 +594,10 @@ If this database directory already exists, \hpcprof{} will form a unique name by
 
 \hpcprof{} performs this analysis in parallel using multithreading.
 By default all available threads are used.
-If this is not wanted (e.g. using sharing a single machine), the thread count can be specified with \texttt{-j<threads>}.
+If this is not wanted (e.g. using sharing a single machine), the thread count can be specified with \texttt{-j <threads>}.
 
 \hpcprof{} usually completes this analysis in a matter of minutes.
-For especially large experiments (applications using more than about 100,000 threads), the sibling \hpcprofmpi{} may produce results faster by exploiting additional compute nodes\footnote{
+For especially large experiments (applications using thousands of threads and/or GPU streams), the sibling \hpcprofmpi{} may produce results faster by exploiting additional compute nodes\footnote{
 We recommend running \hpcprofmpi{} across 8-10 compute nodes. More than this may not improve or may degrade the overall speed of the analysis.
 }.
 Typically \hpcprofmpi{} is invoked as follows, using 8 ranks and compute nodes:
@@ -1328,7 +1327,7 @@ OpenMP computations executing on AMD GPUs are monitored whenever {\tt hpcrun}'s 
 AMD's ROCm 5.1 and later releases contains OMPT support for monitoring and attributing host computations as well as computations
 offloaded to AMD GPUs using OpenMP TARGET. When compiled with  {\tt amdclang} or {\tt amdclang++}, both host computations and computations offloaded to AMD GPUs can be associated with global user-level calling contexts that are children of \verb|<program root>|.
 
-Cray's compilers only have partial support for the OMPT interface, which renders HPCToolkit unable to elide implementation-level details of parallel regions. For everyone but compiler or runtime developers, such details are an unnecessary and make it harder for application developers to understand their code with no added value.
+Cray's compilers only have partial support for the OMPT interface, which renders HPCToolkit unable to elide implementation-level details of parallel regions. For everyone but compiler or runtime developers, such details are unnecessary and make it harder for application developers to understand their code with no added value.
 
 
 \subsection{Intel GPUs}
@@ -1369,6 +1368,18 @@ Other known issues can be seen in the project's Gitlab issues pages:
  \item For HPCToolkit in general, see  \url{https://gitlab.com/HPCToolkit/HPCToolkit/issues}
  \item For hpcviewer, see \url{https://gitlab.com/HPCToolkit/HPCViewer/issues}
 \end{itemize}
+
+\section{When using Intel GPUs, using \hpcrun{} may program alter program behavior when using instruction-level performance measurement}
+
+\paragraph{Description:} Binary instrumentation on Intel GPUs uses Intel's GTPin. For some programs, using instruction counting, latency instrumentation, and/or SIMD instrumentation using GTPin has been observed to affect program behavior in undesirable ways, e.g. changing some program floating point values to NaNs. Testing has confirmed that this is a GTPin issue rather than an \hpcrun{} issue. Unfortunately, GTPin is closed source, so this problem awaits a resolution by Intel.
+
+\paragraph{Workaround:} Rather than attempting to use binary instrumentation to measure instructions, latency, and SIMD information all at once, you may find that using only one or two kinds of analysis at once work better.
+
+\section{When using Intel GPUs, \hpcrun{}  may report that substantial time is spent in a partial call path consisting of only an unknown procedure}
+
+\paragraph{Description:} Binary instrumentation on Intel GPUs uses Intel's GTPin. GTPin runs in its own private namespace.  Asynchronous samples collected in response to Linux timer or hardware counter events may often occur when GTPin is executing. With GTPin in a private namespace, its code and symbols are invisible to \hpcrun{}, which causes a degenerate unwind consisting of only an unknown procedure. 
+
+\paragraph{Workaround:} Don't collect Linux timer or hardware counter events on the CPU when using binary instrumentation to collect instruction-level performance measurements of kernels executing on Intel GPUs.
 
 \section{\hpcrun{} reports partial call paths for code executed by a constructor prior to entering main}
 
@@ -1563,27 +1574,11 @@ reason, it cannot be used to profile {\tt setuid} programs.
 
 \subsection{Problems loading dynamic libraries}
 
-By default, hpcrun use {\tt glibc}'s {\tt LD\_AUDIT} subsystem to monitor an application's use of dynamic
-  libraries. Use of  {\tt LD\_AUDIT}  is needed to properly interpret a load module's
-  {\tt RUNPATH} attribute. However, use of {\tt LD\_AUDIT} will cause {\tt dlmopen} to fail
-  for \verb|glibc < 2.32|. Intel's GTPin library for instrumentation of Intel GPU
-  binaries uses {\tt dlmopen}.
-
-If your program encounters a failure related to dynamic library loading,
-\hpcrun{} has several options for precisely controlling the approach \hpcrun{}'s uses to monitor shared libraries that might help.
-
-\begin{itemize}
-\item\verb|--disable-auditor|. This option instructs hpcrun to track dynamic library operations by intercepting {\tt dlopen} and {\tt dlclose} instead of using {\tt LD\_AUDIT}.
- Note that this alternate approach can cause problem with load modules that specify a {\tt RUNPATH}.
- Due to a {\tt glibc} bug, this option is disabled by default on ARM.
-
-\item\verb|--enable-auditor|. {\tt LD\_AUDIT} is by default disabled on ARM due to a glib bug. Use this option to enable {\tt LD\_AUDIT} on ARM.
-
-\item\verb|--disable-auditor-got-rewriting|. When HPCToolkit uses  {\tt glibs}'s {\tt LD\_AUDIT}  capability {\tt glibc} unnecessarily intercepts every call to a function in a shared library.
-\hpcrun{} avoids this overhead by rewriting each shared library's global offset table (GOT). Such rewriting is tricky. This option can be used to disable GOT rewriting if you suspect that the rewriting is causing your application to fail.
-
-\item\verb|--namespace-single|.   {\tt dlmopen} may load a shared library into an alternate namespace.  Use of {\tt dlmopen} to create multiple namespaces can cause an application to crash when using \verb|glibc < 2.32|. This option asks HPCToolkit to load all  shared libraries within the application namespace, which might help avoid a crash.  (This option is the default when performing instruction-level measurements of Intel GPU binaries with GTPin as GTPin uses  {\tt dlmopen}.)
-\end{itemize}
+By default, hpcrun uses Glibc's {\tt LD\_AUDIT} subsystem to monitor an application's use of dynamic
+  libraries. Use of  {\tt LD\_AUDIT}  is needed to properly track loaded libraries when a
+  {\tt RUNPATH} is set in the application or libraries.
+Due to known bugs in Glibc's implementation, this may cause the application to crash unexpectedly.
+See Section~\ref{hpcrun-audit} for details on the issues present and how to avoid them.
 
 % ===========================================================================
 % ===========================================================================

@@ -484,11 +484,17 @@ At present, the hardware and software stack for AMD GPUs lacks support for fine-
 %\label{intel-level0-options}
 %\end{table}
 
-HPCToolkit supports profiling and tracing of GPU-accelerated  applications that offload computation onto Intel GPUs using  Intel's Data-parallel C++ programming model supported by Intel's {\tt dpcpp} compiler, OpenMP computations offloaded with Intel's {\tt ifx} or {\tt icx} compiler, or OpenCL. At program launch, a user can select whether Intel's Data-parallel C++ programming model is to execute atop Intel's OpenCL runtime or Intel's Level Zero runtime. Support for measuring the performance of GPU-accelerated OpenCL programs is common across all platforms; for that reason, we describe it separately in Section~\ref{sec:gpu-opencl}.
+HPCToolkit supports profiling and tracing of GPU-accelerated  applications that offload computation onto Intel GPUs using  Intel's Data-parallel C++ programming model supported by Intel's {\tt icpx} compiler, OpenMP computations offloaded with Intel's {\tt ifx} or {\tt icx} compiler, or OpenCL. At program launch, a user can select whether Intel's Data-parallel C++ programming model is to execute atop Intel's OpenCL runtime or Intel's Level Zero runtime. Support for measuring the performance of GPU-accelerated OpenCL programs is common across all platforms; for that reason, we describe it separately in Section~\ref{sec:gpu-opencl}.
 
-Table~\ref{intel-level0-options} shows available options for using HPCToolkit with Intel's Level Zero runtime. HPCToolkit supports both coarse-grain profiling and tracing of GPU operations atop Intel's Level Zero runtime. With this coarse-grain profiling support, HPCToolkit can collect GPU operation timings (Table~\ref{table:gtimes}) and a subset of standard metrics for GPU operations such as memory allocation and deallocation (Table~\ref{table:gmem}), memory set (Table~\ref{table:gmset}), explicit memory copies (Table~\ref{table:gxcopy}), and synchronization (Table~\ref{table:gsync}). In addition to coarse-grain profiling and tracing, HPCToolkit supports instrumentation-based measurement of GPU kernels on Intel GPUs using the Intel's GT-Pin binary instrumentation tool in conjunction with the Level Zero runtime. Instrumentation can be combined with profiling and tracing in the same execution.
+Table~\ref{intel-level0-options} shows available options for using HPCToolkit with Intel's Level Zero runtime. HPCToolkit supports both coarse-grain profiling and tracing of GPU operations atop Intel's Level Zero runtime. With this coarse-grain profiling support, HPCToolkit can collect GPU operation timings (Table~\ref{table:gtimes}) and a subset of standard metrics for GPU operations such as memory allocation and deallocation (Table~\ref{table:gmem}), memory set (Table~\ref{table:gmset}), explicit memory copies (Table~\ref{table:gxcopy}), and synchronization (Table~\ref{table:gsync}). In addition to coarse-grain profiling and tracing, HPCToolkit supports instrumentation-based measurement of GPU kernels on Intel GPUs using the Intel's GTPin binary instrumentation tool in conjunction with the Level Zero runtime. 
+ At present, the only instrumentation-based measurement supported using GTPin is collecting exact dynamic instruction counts.
+ Instrumentation can be combined with profiling and tracing in the same execution.
 
-Currently, HPCToolkit supports two types of instrumentation-based measurement of GPU kernels on Intel GPUs: dynamic instruction counting and approximate attribution of memory latency. Dynamic instruction counts for kernels are exact. Without hardware support for associating memory latency directly with individual memory accesses, HPCToolkit approximately attributes the exposed memory latency in a basic block by dividing it up among all of the memory accesses in the block.
+\begin{comment}
+Currently, HPCToolkit supports three types of instrumentation-based measurement of GPU kernels on Intel GPUs: dynamic instruction counting, approximate attribution of memory latency and SIMD analysis.  Dynamic instruction counts for kernels are exact. 
+
+Without hardware support for associating memory latency directly with individual memory accesses, HPCToolkit approximately attributes the exposed memory latency in a basic block by dividing it up among all of the memory accesses in the block. SIMD analysis involves measuring 4 different metrics - number of total SIMD lanes, number of active SIMD lanes, number of wasted SIMD lanes and SIMD lanes lost due to scalar instructions.
+\end{comment}
 
 \begin{table}[t]
 \centering
@@ -496,9 +502,13 @@ Currently, HPCToolkit supports two types of instrumentation-based measurement of
 Argument to \hpcrun{} & What is monitored\\\hline\hline
 {\tt -e gpu=level0} & coarse-grain profiling of Intel GPU operations using Intel's Level 0 runtime\\\hline
 {\tt -e gpu=level0 -t} & coarse-grain profiling and tracing of Intel GPU operations using Intel's Level 0 runtime\\\hline
-{\tt -e gpu=level0,inst=what} & coarse-grain profiling of Intel GPU operations using Intel's Level 0 runtime;  fine-grain measurement of Intel GPU kernel executions using Intel's GT-Pin support values for {\em what} that include a comma-separated list that may contain values drawn from the set \{count, latency\}\\\hline
-{\tt -e gpu=level0,inst=what -t } & coarse-grain profiling and tracing of Intel GPU operations using Intel's Level 0 runtime;  fine-grain measurement of Intel GPU kernel executions using Intel's GT-Pin support values for {\em what} that include a comma-separated list that may contain values drawn from the set \{count, latency\}\\\hline
+{\tt -e gpu=level0,inst=count} & coarse-grain profiling of Intel GPU operations using Intel's Level 0 runtime;  fine-grain measurement of Intel GPU kernel executions using Intel's GT-Pin for instruction counting\\\hline
+{\tt -e gpu=level0,inst=count -t } & coarse-grain profiling and tracing of Intel GPU operations using Intel's Level 0 runtime; fine-grain measurement of Intel GPU kernel executions using Intel's GT-Pin for instruction counting\\\hline
 \end{tabular}
+\begin{comment}
+{\tt -e gpu=level0,inst=what} & coarse-grain profiling of Intel GPU operations using Intel's Level 0 runtime;  fine-grain measurement of Intel GPU kernel executions using Intel's GT-Pin support values for {\em what} that include a comma-separated list that may contain values drawn from the set \{count, latency, simd\}\\\hline
+{\tt -e gpu=level0,inst=what -t } & coarse-grain profiling and tracing of Intel GPU operations using Intel's Level 0 runtime;  fine-grain measurement of Intel GPU kernel executions using Intel's GT-Pin support values for {\em what} that include a comma-separated list that may contain values drawn from the set \{count, latency, simd\}\\\hline
+\end{comment}
 \caption{Monitoring performance on Intel GPUs when using Intel's Level 0 runtime.}
 \label{intel-level0-options}
 \end{table}
