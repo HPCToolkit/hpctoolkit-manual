@@ -913,7 +913,7 @@ Similar to \depthview, the time range in \summaryview{} is always consistent wit
 
 
 This view lists the call path of process $p$ and time $t$ specified in \traceview{} and \depthview.
-Figure~\ref{fig:hpctraceviewer-legend} shows a call path of the current crosshair, and the current depth is $10$ as shown in the depth editor (located on the top part of the view).
+Figure~\ref{fig:hpctraceviewer-legend} shows a call path of the current cross hair, and the current depth is $10$ as shown in the depth editor (located on the top part of the view).
 
 In this view, the user can select the depth dimension of \traceview{} by either typing the depth in the depth editor or selecting a procedure in the table of call path.
 
@@ -926,24 +926,8 @@ The \miniview{} shows, relative to the process/time dimensions, the portion of t
 In \miniview{}, the user can select a new process/time $(p_a,t_a),(p_b,t_b)$ dimensions by clicking the first process/time position $(p_a,t_a)$ and then drag the cursor to the second position $(p_b,t_b)$.
 The user can also moving the current selected region to another region by clicking the white rectangle and drag it to the new place.
 
-
-% ===========================================================================
-% ===========================================================================
-
-
 \hpctraceviewer{} also provides a context menu to save the current image of the view.
 This context menu is available is three views: trace view, depth view and summary view.
-
-% ===========================================================================
-% ===========================================================================
-
-\section{GPU Threads}
-
-\hpctraceviewer{} displays activity over time in GPU streams as well as CPU threads. Presently, GPU streams and CPU threads are indexed within a process or MPI rank using a single integer coordinate. To distinguish between GPU threads and CPU threads in this prototype, CPU thread numbers begin at 0 and GPU stream numbers begin at 500.\footnote{A future version of HPCToolkit will clearly distinguish GPU streams from CPU threads. This will require changes to measurement, file formats, post-processing, and the user interfaces. Treating GPU streams like threads with indices beginning at 500 is a workaround until the overhaul is complete.}
-
-Unlike CPU threads, which are sampled, each GPU activity (e.g., a kernel execution or a memory copy)  on a GPU stream or queue is traced. To avoid giving a misleading view of GPU activity on a stream or queue, intervals between GPU activities where the GPU is idle are marked with the placeholder \verb|<no activity>|.
-
-
 
 % ===========================================================================
 % ===========================================================================
@@ -960,6 +944,7 @@ This menu includes several menu items for controlling basic viewer operations.
 \begin{itemize}
   \item \textbf{New window}
   Open a new \hpcviewer{} window that is independent from the existing one.
+However, filtering CCT node operation (Section~\ref{sec:filter}) will affect all \hpcviewer{} windows.
 
   \item \textbf{Open database}
   Open a database without replacing the existing one. This menu can be used to compare two databases.
@@ -1002,7 +987,7 @@ This menu only contains one submenu:
  \item \textbf{Filter CCT nodes}
   Open a filter property window which lists a set of filters and its properties (Section~\ref{sec:filter}).
 
- \item \textbf{Filter ranks} \textit{(Trace view only)}
+ \item \textbf{Filter execution contexts} \textit{(Trace view only)}
   Open a window for selecting which nodes will be hidden in the tree.
   Currently filtering CCT nodes only affect the Profile view, and doesn't affect the Trace view.
 
