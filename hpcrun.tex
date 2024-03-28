@@ -150,7 +150,7 @@ Use of \verb|LD_AUDIT|  is the only  strategy for monitoring shared libraries th
 This is caused by a flaw in Glibc causing it to allocate insufficient static TLS space when \verb|LD_AUDIT| is enabled.
 For Glibc 2.35 and newer, setting the environment variable
 \begin{verbatim}
-export GLIBC_TUNABLES=glibc.rtld.optional_static_tls=0x400000000
+export GLIBC_TUNABLES=glibc.rtld.optional_static_tls=0x1000000
 \end{verbatim}
 will instruct Glibc to allocate $16$MB of static TLS memory per thread, in our experience this is far more than any application will use (however the value can be adjusted freely).
 For older Glibc, the only option is to disable \hpcrun{}'s use of \verb|LD_AUDIT|.
@@ -743,7 +743,7 @@ This section provides a brief overview of how to use \HPCToolkit{} to analyze th
 Normally, \hpcrun{} will attribute performance to the CPython implementation, not to the application Python code, as shown in Figure~\ref{fig:python-support}.
 This usually is of little interest to an application developer, so \HPCToolkit{} provides experimental support for attributing to Python callstacks.
 
-\textbf{NOTE: This feature is in an experimental state. Many cases may not work as expected, crashes and corrupted performance data are likely. Use at your own risk.}
+\textbf{NOTE: Python support in HPCToolkit is in early days. If you compile HPCToolkit to match the version of Python being used by your application, in many cases you will find that you can measure what you want. However, other cases may not work as expected; crashes and corrupted performance data are not uncommon.  For the aforementioned reasons, use at your own risk.}
 
 \begin{figure}[ht]
 \centering
@@ -773,13 +773,15 @@ It is recommended that users are aware of these limitations before attempting to
 
 \begin{enumerate}
 \item
-Pythons older than 3.10 are not supported by \HPCToolkit{}.
+Pythons older than 3.8 are not supported by \HPCToolkit{}.
 Please upgrade any applications and Python extensions to use a recent version of Python before attempting to enable Python support.
 
 \item
-The application must be run with the same Python that was used to compile \HPCToolkit{}.
+The application should be run with the same Python that was used to compile \HPCToolkit{}.
 The CPython ABI can change between patch versions and due to certain build configuration flags.
-To ensure \hpcrun{} will not unwittingly crash the application, it is best to use a single Python for both \HPCToolkit{} and the application.
+To ensure \hpcrun{} will not unwittingly crash the application, it is best to use a single Python for both \HPCToolkit{} and the application. 
+
+Despite this recommendation, it is worth noting that we have had some minor success with cross-version compatability (e.g. building HPCToolkit with Python 3.11.8 support and using it to measure a program running under Python 3.11.6) However, you should be surprised if cross-version compatibility works rather than expecting it to work, even across patch releases.
 
 \item
 The bottom-up and flat views of \hpcviewer{} may not correctly present Python callstacks, particularly those that call C/C++ extensions.

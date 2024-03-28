@@ -120,7 +120,7 @@
 % ***************************************************************************
 % ***************************************************************************
 
-\title{\HPCToolkit{} User's Manual\\[.5in]Version 2023.08.0}
+\title{\HPCToolkit{} User's Manual\\[.5in]Version 2024.01}
 %\subtitle{}
 
 \author{John Mellor-Crummey,\\
@@ -137,7 +137,7 @@ Keren Zhou\\
 \\
 Rice University\\
 }
-\date{August 2023}
+\date{March 2024}
 
 \maketitle
 
@@ -1368,11 +1368,25 @@ Other known issues can be seen in the project's Gitlab issues pages:
  \item For hpcviewer, see \url{https://gitlab.com/HPCToolkit/HPCViewer/issues}
 \end{itemize}
 
-\section{When using Intel GPUs, using \hpcrun{} may program alter program behavior when using instruction-level performance measurement}
+\section{Inaccurate attribution of performance information can occur on Sapphire Rapids processors with HPCToolkit}
 
-\paragraph{Description:} Binary instrumentation on Intel GPUs uses Intel's GTPin. For some programs, using instruction counting, latency instrumentation, and/or SIMD instrumentation using GTPin has been observed to affect program behavior in undesirable ways, e.g. changing some program floating point values to NaNs. Testing has confirmed that this is a GTPin issue rather than an \hpcrun{} issue. Unfortunately, GTPin is closed source, so this problem awaits a resolution by Intel.
+\paragraph{Description:} HPCToolkit depends upon the Dyninst binary analysis framework. Prior to Dyninst version 13.0, Dyninst stops its binary analysis of functions whenever it sees an a bit pattern that it doesn't recognize as a machine instruction. Unfortunately, Dyninst currently lacks support for decoding the AMX (advanced matrix extension) instructions supported by Sapphire Rapids. Prior to version 13.0, Dyninst will stop analysis of machine code in a function if it encounters an AMX instruction. This shortcoming in Dyninst can cause \hpcstruct{} to fail to fully recover program structure for functions, leading to inaccurate attribution of program performance by HPCToolkit.
 
-\paragraph{Workaround:} Rather than attempting to use binary instrumentation to measure instructions, latency, and SIMD information all at once, you may find that using only one or two kinds of analysis at once work better.
+\paragraph{Workaround:} Building HPCToolkit atop Dyninst 13.0 resolves the issue.
+
+\section{We observed bad generated code for Dyninst using gcc 11.2.0 on Aurora}
+
+\paragraph{Description:} On the Aurora supercomputer, we observed that hpcstruct crashed with a segmentation fault when it and its Dyninst dependence were compiled with gcc 11.2.0. Debugging showed that when a class in Dyninst called a function implemented by its base class, the wrong {\tt this} pointer value was passed to the function, causing a segmentation fault. 
+
+\paragraph{Workaround:} Recompiling HPCToolkit and Dyninst with gcc 12.2.0 eliminated the problem.
+
+\section{When monitoring applications that use ROCm 6.0.0, using LD\_AUDIT in \hpcrun{} may cause it to fail to elide OpenMP runtime frames}
+
+\paragraph{Description:}  When an application provides a runtime that supports the OpenMP tools API known as OMPT, normally in the OpenMP runtime frames between user code on call stacks are elided. However, have observed that when using Glibc's \verb|LD_AUDIT| as part of HPCToolkit's measurement infrastructure and using Rocm 6.0.0, an application's TLS storage may be reinitialized during HPCToolkit's initialization; this clears some important HPCToolkit state information from thread local variables. As a result, the primary thread is not recognized as an OpenMP thread, which is necessary to elide runtime frames.
+
+The root cause of the problem is a bug in Glibc's \verb|LD_AUDIT|. This is believed to affect all versions of Glibc. However, we have only observed this problem when using ROCm 6.0.0.
+
+\paragraph{Workaround:} Use the \verb|--disable-auditor| option to \hpcrun{}.
 
 \section{When using Intel GPUs, \hpcrun{}  may report that substantial time is spent in a partial call path consisting of only an unknown procedure}
 
